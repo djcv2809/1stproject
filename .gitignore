@@ -1,0 +1,6 @@
+entrada/
+entrada_demo/
+saida/
+saida_demo/
+__pycache__/
+*.pyc
