@@ -7,6 +7,7 @@ Configuração por variáveis de ambiente:
 """
 import os
 import smtplib
+import socket
 from datetime import date, datetime
 from email.message import EmailMessage
 
@@ -72,6 +73,24 @@ def montar_email(eventos, hoje):
     return assunto, "\n".join(linhas)
 
 
+class ErroEmail(RuntimeError):
+    """Falha de envio com explicação em português."""
+
+
+def _explicar(exc, host, port):
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        return ("Login recusado pelo servidor. No Gmail, use a SENHA DE APP de 16 letras (não a senha "
+                "normal), com verificação em duas etapas ativa, e SMTP_USER igual ao Gmail que gerou a senha.")
+    if isinstance(exc, smtplib.SMTPServerDisconnected):
+        return (f"A conexão com {host}:{port} foi fechada. Causas comuns: antivírus/firewall bloqueando "
+                f"e-mail, rede ou operadora bloqueando a porta {port}, ou porta errada. Tente "
+                f"SMTP_PORT={'587' if port == 465 else '465'} no .env. ({exc})")
+    if isinstance(exc, (socket.timeout, TimeoutError, ConnectionError, socket.gaierror, OSError)):
+        return (f"Não consegui conectar em {host}:{port} ({exc}). Verifique a internet, o firewall/"
+                f"antivírus e tente a outra porta (587 ou 465).")
+    return str(exc)
+
+
 def enviar_smtp(assunto, corpo, destinatarios=None):
     host = os.environ.get("SMTP_HOST")
     to = ",".join(destinatarios) if destinatarios else os.environ.get("MAIL_TO")
@@ -82,11 +101,18 @@ def enviar_smtp(assunto, corpo, destinatarios=None):
     msg["Subject"], msg["To"] = assunto, to
     msg["From"] = os.environ.get("MAIL_FROM") or user or "contratos@localhost"
     msg.set_content(corpo)
-    with smtplib.SMTP(host, int(os.environ.get("SMTP_PORT", "587")), timeout=30) as s:
-        s.starttls()
-        if user:
-            s.login(user, pwd or "")
-        s.send_message(msg)
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    try:
+        # porta 465 = SSL direto; demais (587) = STARTTLS
+        srv = smtplib.SMTP_SSL(host, port, timeout=30) if port == 465 else smtplib.SMTP(host, port, timeout=30)
+        with srv as s:
+            if port != 465:
+                s.starttls()
+            if user:
+                s.login(user, pwd or "")
+            s.send_message(msg)
+    except (smtplib.SMTPException, OSError) as exc:
+        raise ErroEmail(_explicar(exc, host, port)) from exc
 
 
 def executar(conn, hoje=None, enviar=enviar_smtp, simular=False):

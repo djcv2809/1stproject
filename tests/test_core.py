@@ -175,6 +175,32 @@ class Core(unittest.TestCase):
             db.DB_PATH = antigo
 
 
+    def test_smtp_porta_465_e_erros_explicados(self):
+        import os
+        import smtplib
+        from unittest import mock
+        env = {"SMTP_HOST": "h", "MAIL_TO": "a@x.com", "SMTP_PORT": "465", "SMTP_USER": "u", "SMTP_PASS": "p"}
+        with mock.patch.dict(os.environ, env), \
+                mock.patch.object(lembretes.smtplib, "SMTP_SSL") as ssl_, \
+                mock.patch.object(lembretes.smtplib, "SMTP") as plain:
+            lembretes.enviar_smtp("a", "b")
+            ssl_.assert_called_once()
+            plain.assert_not_called()
+        env["SMTP_PORT"] = "587"
+        with mock.patch.dict(os.environ, env), \
+                mock.patch.object(lembretes.smtplib, "SMTP",
+                                  side_effect=smtplib.SMTPServerDisconnected("Connection unexpectedly closed")):
+            with self.assertRaises(lembretes.ErroEmail) as cm:
+                lembretes.enviar_smtp("a", "b")
+            self.assertIn("465", str(cm.exception))
+        with mock.patch.dict(os.environ, env), \
+                mock.patch.object(lembretes.smtplib, "SMTP",
+                                  side_effect=smtplib.SMTPAuthenticationError(535, b"bad")):
+            with self.assertRaises(lembretes.ErroEmail) as cm:
+                lembretes.enviar_smtp("a", "b")
+            self.assertIn("SENHA DE APP", str(cm.exception))
+
+
 class Config(unittest.TestCase):
     def test_env_nao_sobrescreve(self):
         import os
