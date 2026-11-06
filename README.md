@@ -61,7 +61,8 @@ Tarefas do Windows etc.) em uma máquina que fique ligada, com essas variáveis 
 1. Instale o Python 3.10+ (python.org; marque "Add Python to PATH") e copie esta pasta para o computador.
 2. Copie `.env.example` para `.env` e preencha (no Gmail, gere uma *senha de app* em
    myaccount.google.com/apppasswords; exige verificação em duas etapas).
-3. Coloque os JSONs em `data\` e importe cada um: `python -m gestao_contratos importar data\arquivo.json`
+3. Coloque os JSONs em `data\` e dê clique duplo em `importar_windows.bat` (importa todos, uma única vez;
+   recusa rodar de novo para não duplicar). Individualmente: `py -3 -m gestao_contratos importar data\arquivo.json`
 4. Teste sem enviar: `python -m gestao_contratos lembretes --simular`
 5. Dê **clique duplo em `agendar_windows.bat`**: ele cria a tarefa diária às **10:00** (para mudar o horário,
    edite `$hora` em `agendar_windows.ps1` e rode de novo). A tarefa roda mesmo que o PC estivesse desligado
