@@ -36,7 +36,14 @@ Datas em `AAAA-MM-DD`. Se qualquer item for inválido, nada é gravado.
 
 Os avisos saem com antecedência de 30, 15, 7, 1 e 0 dias (ajustável em `GC_ANTECEDENCIA="30,10,3,0"`)
 e uma vez para itens atrasados. Cada aviso é enviado uma única vez; se a data mudar, o aviso é reaberto.
-Todos os avisos do dia vão num único e-mail-resumo.
+Os avisos de um mesmo conjunto de destinatários vão num único e-mail-resumo.
+
+### Destinatários por contrato
+
+Cada contrato pode ter o campo `emails_aviso` (um ou mais e-mails separados por vírgula, no JSON ou
+na tela do contrato). Os avisos desse contrato vão **só** para esses endereços; contratos sem o campo
+usam `MAIL_TO`. Útil para separar assuntos pessoais dos da empresa. Bancos antigos recebem o campo
+automaticamente.
 
 ## Configurar o e-mail
 

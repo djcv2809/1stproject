@@ -62,20 +62,20 @@ class Core(unittest.TestCase):
     def test_lembretes_sem_duplicar(self):
         db.create_contract(self.conn, CONTRATO)
         enviados = []
-        ev = lembretes.executar(self.conn, HOJE, enviar=lambda a, c: enviados.append((a, c)))
+        ev = lembretes.executar(self.conn, HOJE, enviar=lambda a, c, t: enviados.append((a, c)))
         # hoje: vistoria (0d), pagamento atrasado, aviso de renovação atrasado; nov/13 = 7d
         self.assertEqual(len(ev), 4)
         self.assertEqual(len(enviados), 1)
         self.assertIn("ATRASADO", enviados[0][1])
         self.assertIn("R$ 3.500,00", enviados[0][1])
         self.assertIn("13/11/2026", enviados[0][1])
-        self.assertEqual(lembretes.executar(self.conn, HOJE, enviar=lambda a, c: enviados.append(1)), [])
+        self.assertEqual(lembretes.executar(self.conn, HOJE, enviar=lambda a, c, t: enviados.append(1)), [])
         self.assertEqual(len(enviados), 1)
 
     def test_falha_no_envio_nao_marca_como_enviado(self):
         db.create_contract(self.conn, CONTRATO)
 
-        def falha(a, c):
+        def falha(a, c, t):
             raise OSError("smtp fora do ar")
         with self.assertRaises(OSError):
             lembretes.executar(self.conn, HOJE, enviar=falha)
@@ -83,11 +83,56 @@ class Core(unittest.TestCase):
 
     def test_mudar_data_reabre_aviso(self):
         db.create_contract(self.conn, CONTRATO)
-        lembretes.executar(self.conn, HOJE, enviar=lambda a, c: None)
+        lembretes.executar(self.conn, HOJE, enviar=lambda a, c, t: None)
         mid = self.conn.execute("SELECT id FROM compromissos").fetchone()[0]
         db.update(self.conn, "compromissos", mid, {"data": "2026-11-13"})
         novos = [e for e in lembretes.pendentes(self.conn, HOJE) if e["tipo"] == "compromisso"]
         self.assertEqual(len(novos), 1)  # nova data => nova chave; 7 dias está na lista
+
+
+    def test_destinatarios_por_contrato(self):
+        db.create_contract(self.conn, {**CONTRATO, "nome": "Pessoal", "emails_aviso": "A@x.com; b@y.com a@x.com"})
+        db.create_contract(self.conn, {**CONTRATO, "nome": "Empresa"})
+        envios = []
+        lembretes.executar(self.conn, HOJE, enviar=lambda a, c, t: envios.append((t, c)))
+        self.assertEqual(len(envios), 2)
+        por_dest = {tuple(t): c for t, c in envios}
+        self.assertEqual(set(por_dest), {("a@x.com", "b@y.com"), ()})
+        self.assertEqual(por_dest[("a@x.com", "b@y.com")].count("Contrato: Pessoal"), 4)
+        self.assertNotIn("Contrato: Empresa", por_dest[("a@x.com", "b@y.com")])
+
+    def test_falha_de_um_grupo_nao_bloqueia_o_outro(self):
+        db.create_contract(self.conn, {**CONTRATO, "nome": "Pessoal", "emails_aviso": "a@x.com"})
+        db.create_contract(self.conn, {**CONTRATO, "nome": "Empresa"})
+
+        def so_empresa(a, c, t):
+            if t:
+                raise OSError("falhou")
+        with self.assertRaises(OSError):
+            lembretes.executar(self.conn, HOJE, enviar=so_empresa)
+        restantes = lembretes.pendentes(self.conn, HOJE)
+        self.assertEqual({e["contrato"] for e in restantes}, {"Pessoal"})
+
+    def test_emails_validacao(self):
+        with self.assertRaises(ValueError):
+            db.clean("contratos", {"nome": "x", "contraparte": "y", "emails_aviso": "sem-arroba"})
+        ok = db.clean("contratos", {"nome": "x", "contraparte": "y", "emails_aviso": ["A@x.com", "a@x.com"]})
+        self.assertEqual(ok["emails_aviso"], "a@x.com")
+
+    def test_migracao_de_banco_antigo(self):
+        import os
+        import sqlite3
+        import tempfile
+        path = os.path.join(tempfile.mkdtemp(), "velho.db")
+        old = sqlite3.connect(path)
+        old.executescript(db.SCHEMA.replace(" emails_aviso TEXT,", ""))
+        old.execute("INSERT INTO contratos (nome, contraparte) VALUES ('a', 'b')")
+        old.commit()
+        old.close()
+        conn = db.connect(path)
+        self.assertEqual(db.list_contracts(conn)[0]["emails_aviso"], None)
+        db.update(conn, "contratos", 1, {"emails_aviso": "z@x.com"})
+        self.assertEqual(db.get_contract(conn, 1)["emails_aviso"], "z@x.com")
 
 
 class Http(unittest.TestCase):

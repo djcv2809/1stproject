@@ -66,7 +66,7 @@ function contractForm(c){c=c||{status:'ativo'};
  const f=h('form',{class:'card',onsubmit:async ev=>{ev.preventDefault();const d=Object.fromEntries(new FormData(f));d.renovacao_automatica=f.renovacao_automatica.checked;
   const out=c.id?await api('PUT','/api/contratos/'+c.id,d):await api('POST','/api/contratos',d);showContract(c.id||out.id)}},
  h('h2',{},c.id?'Editar contrato':'Novo contrato'),
- h('div',{class:'grid'},field('Nome *','nome',c.nome),field('Contraparte *','contraparte',c.contraparte),field('Valor total (R$)','valor_total',c.valor_total,'number'),
+ h('div',{class:'grid'},field('Nome *','nome',c.nome),field('Contraparte *','contraparte',c.contraparte),field('Valor total (R$)','valor_total',c.valor_total,'number'),field('E-mails dos avisos (vírgula; vazio = padrão)','emails_aviso',c.emails_aviso),
   field('Início','data_inicio',c.data_inicio,'date'),field('Fim da vigência','data_fim',c.data_fim,'date'),field('Aviso prévio de não-renovação (dias)','aviso_previo_dias',c.aviso_previo_dias,'number'),
   h('div',{},h('label',{},'Status'),(()=>{const s=h('select',{name:'status'},...['ativo','encerrado','rescindido'].map(o=>h('option',{value:o},o)));s.value=c.status;return s})()),
   h('div',{},h('label',{},'Renovação automática'),h('input',{type:'checkbox',name:'renovacao_automatica',style:'width:auto',checked:c.renovacao_automatica?'checked':false}))),
@@ -84,7 +84,7 @@ async function showContract(id){setActive('');const c=await api('GET','/api/cont
   h('div',{class:'card'},h('div',{class:'row'},h('h2',{style:'margin:0;flex:1'},c.nome),h('span',{class:'tag'},c.status),
     h('button',{onclick:()=>view.replaceChildren(contractForm(c))},'Editar'),
     h('button',{class:'d',onclick:async()=>{if(confirm('Excluir contrato e tudo que está nele?')){await api('DELETE','/api/contratos/'+id);showList()}}},'Excluir')),
-   h('p',{class:'mut'},`${c.contraparte} · ${dt(c.data_inicio)} → ${dt(c.data_fim)} · ${brl(c.valor_total)}${c.renovacao_automatica?` · renovação automática (aviso ${c.aviso_previo_dias??'?'} dias)`:''}`),
+   h('p',{class:'mut'},`${c.contraparte} · ${dt(c.data_inicio)} → ${dt(c.data_fim)} · ${brl(c.valor_total)}${c.renovacao_automatica?` · renovação automática (aviso ${c.aviso_previo_dias??'?'} dias)`:''}${c.emails_aviso?` · avisos para ${c.emails_aviso}`:''}`),
    c.objeto&&h('div',{},h('h3',{},'Objeto'),h('div',{class:'pre'},c.objeto)),
    c.escopo&&h('div',{},h('h3',{},'Escopo'),h('div',{class:'pre'},c.escopo)),
    c.observacoes&&h('div',{},h('h3',{},'Observações'),h('div',{class:'pre mut'},c.observacoes))),
@@ -107,6 +107,7 @@ function showImport(){setActive('n-imp');const ta=h('textarea',{style:'min-heigh
    let last;for(const c of Array.isArray(d)?d:[d])last=(await api('POST','/api/contratos',c)).id;showContract(last)}},'Importar'))))}
 
 $('#n-agenda').onclick=showAgenda;$('#n-contratos').onclick=showList;$('#n-novo').onclick=()=>{setActive('n-novo');view.replaceChildren(contractForm())};$('#n-imp').onclick=showImport;
+window.addEventListener('unhandledrejection',e=>e.preventDefault()); // erro já exibido por showErr
 showAgenda();
 </script>
 </body>

@@ -1,7 +1,8 @@
 """Lembretes por e-mail das datas de compromissos dos contratos.
 
 Configuração por variáveis de ambiente:
-  SMTP_HOST, SMTP_PORT (587), SMTP_USER, SMTP_PASS, MAIL_FROM, MAIL_TO (vários separados por vírgula)
+  SMTP_HOST, SMTP_PORT (587), SMTP_USER, SMTP_PASS, MAIL_FROM,
+  MAIL_TO  destinatários padrão (vários separados por vírgula), usados pelos contratos sem `emails_aviso`
   GC_ANTECEDENCIA  dias de antecedência que disparam aviso (padrão "30,15,7,1,0")
 """
 import os
@@ -70,8 +71,9 @@ def montar_email(eventos, hoje):
     return assunto, "\n".join(linhas)
 
 
-def enviar_smtp(assunto, corpo):
-    host, to = os.environ.get("SMTP_HOST"), os.environ.get("MAIL_TO")
+def enviar_smtp(assunto, corpo, destinatarios=None):
+    host = os.environ.get("SMTP_HOST")
+    to = ",".join(destinatarios) if destinatarios else os.environ.get("MAIL_TO")
     if not host or not to:
         raise RuntimeError("Defina SMTP_HOST e MAIL_TO (veja README).")
     user, pwd = os.environ.get("SMTP_USER"), os.environ.get("SMTP_PASS")
@@ -87,18 +89,33 @@ def enviar_smtp(assunto, corpo):
 
 
 def executar(conn, hoje=None, enviar=enviar_smtp, simular=False):
-    """Envia um resumo único com todos os avisos pendentes. Retorna a lista de eventos."""
+    """Envia os avisos pendentes: um e-mail-resumo por conjunto de destinatários.
+
+    Contratos com `emails_aviso` vão só para esses endereços; os demais, para MAIL_TO.
+    Um envio que falha não marca nada como enviado; os outros grupos seguem normalmente.
+    """
     hoje = hoje or date.today()
-    eventos = pendentes(conn, hoje)
-    if not eventos:
-        return []
-    assunto, corpo = montar_email(eventos, hoje)
-    if simular:
-        print(f"Assunto: {assunto}\n\n{corpo}")
-        return eventos
-    enviar(assunto, corpo)  # se falhar, nada é marcado como enviado
-    with conn:
-        conn.executemany(
-            "INSERT OR IGNORE INTO lembretes_enviados (chave, enviado_em) VALUES (?, ?)",
-            [(e["chave_envio"], datetime.now().isoformat(timespec="seconds")) for e in eventos])
-    return eventos
+    grupos = {}
+    for e in pendentes(conn, hoje):
+        dest = tuple(e["emails_aviso"].split(",")) if e["emails_aviso"] else ()
+        grupos.setdefault(dest, []).append(e)
+    enviados, erros = [], []
+    for dest, eventos in grupos.items():
+        assunto, corpo = montar_email(eventos, hoje)
+        if simular:
+            print(f"Para: {', '.join(dest) or '(MAIL_TO padrão)'}\nAssunto: {assunto}\n\n{corpo}\n")
+            enviados += eventos
+            continue
+        try:
+            enviar(assunto, corpo, list(dest))
+        except Exception as exc:
+            erros.append(exc)
+            continue
+        with conn:
+            conn.executemany(
+                "INSERT OR IGNORE INTO lembretes_enviados (chave, enviado_em) VALUES (?, ?)",
+                [(e["chave_envio"], datetime.now().isoformat(timespec="seconds")) for e in eventos])
+        enviados += eventos
+    if erros:
+        raise erros[0]
+    return enviados

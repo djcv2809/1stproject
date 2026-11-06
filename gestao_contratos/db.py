@@ -1,5 +1,6 @@
 """Banco de dados (SQLite), validação e cálculo da agenda de compromissos."""
 import os
+import re
 import sqlite3
 from datetime import date, timedelta
 
@@ -16,7 +17,7 @@ CREATE TABLE IF NOT EXISTS contratos (
   renovacao_automatica INTEGER NOT NULL DEFAULT 0,
   aviso_previo_dias INTEGER,
   status TEXT NOT NULL DEFAULT 'ativo',
-  observacoes TEXT,
+  observacoes TEXT, emails_aviso TEXT,
   criado_em TEXT NOT NULL DEFAULT (date('now'))
 );
 CREATE TABLE IF NOT EXISTS clausulas (
@@ -51,6 +52,7 @@ SPEC = {
         "renovacao_automatica": ("bool", False), "aviso_previo_dias": ("int", False),
         "status": ("enum:ativo,encerrado,rescindido", False),
         "observacoes": ("text", False),
+        "emails_aviso": ("emails", False),
     },
     "clausulas": {
         "titulo": ("text", True), "texto": ("text", False), "categoria": ("text", False),
@@ -65,6 +67,7 @@ SPEC = {
     },
 }
 CHILDREN = ("clausulas", "pagamentos", "compromissos")
+EMAIL_RE = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
 
 
 def connect(path=None):
@@ -75,6 +78,9 @@ def connect(path=None):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(contratos)")}
+    if "emails_aviso" not in cols:  # bancos criados antes deste campo
+        conn.execute("ALTER TABLE contratos ADD COLUMN emails_aviso TEXT")
     return conn
 
 
@@ -110,6 +116,12 @@ def clean(table, data, partial=False):
                 v = int(v)
                 if v < 0:
                     raise ValueError
+            elif kind == "emails":
+                parts = re.split(r"[,;\s]+", v) if isinstance(v, str) else list(v)
+                parts = [str(x).strip().lower() for x in parts if str(x).strip()]
+                if not parts or len(parts) > 10 or not all(EMAIL_RE.match(x) for x in parts):
+                    raise ValueError
+                v = ",".join(dict.fromkeys(parts))
             elif kind == "bool":
                 v = 1 if v in (True, 1, "1", "true", "sim") else 0
             elif kind.startswith("enum:"):
@@ -210,7 +222,7 @@ def agenda(conn, hoje=None):
         ev.append({
             "tipo": tipo, "data": data, "dias": (d - hoje).days,
             "contrato_id": c["id"], "contrato": c["nome"], "contraparte": c["contraparte"],
-            "descricao": descricao, "valor": valor, "chave": f"{tipo}:{c['id']}:{ref}:{data}",
+            "descricao": descricao, "valor": valor, "emails_aviso": c["emails_aviso"], "chave": f"{tipo}:{c['id']}:{ref}:{data}",
         })
 
     for c in conn.execute("SELECT * FROM contratos WHERE status='ativo'"):
