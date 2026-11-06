@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestão de Contratos</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1d2330;--mut:#667085;--bd:#e3e6ec;--ac:#1f5eff;--red:#c92a2a;--amb:#b26a00;--grn:#1a7f4b}
+@media (prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b202b;--tx:#e8ebf2;--mut:#98a2b3;--bd:#2c3342;--ac:#6d93ff;--red:#ff7b7b;--amb:#ffb457;--grn:#4cc38a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--bd);flex-wrap:wrap}
+header h1{font-size:18px;margin:0 8px 0 0}nav button{margin-right:6px}
+main{max-width:1000px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+h2{font-size:16px;margin:0 0 10px}h3{font-size:14px;margin:16px 0 8px}
+button{font:inherit;padding:6px 12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:7px;cursor:pointer}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac)}button.d{color:var(--red)}button.on{border-color:var(--ac);color:var(--ac)}
+input,textarea,select{font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:7px;background:var(--bg);color:var(--tx);width:100%}
+textarea{min-height:70px}label{display:block;font-size:12px;color:var(--mut);margin-bottom:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:10px}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px 6px;border-bottom:1px solid var(--bd);vertical-align:top}th{font-size:12px;color:var(--mut)}
+tr.link{cursor:pointer}tr.link:hover{background:var(--bg)}.r{text-align:right}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;border:1px solid var(--bd)}
+.late{color:var(--red);font-weight:600}.soon{color:var(--amb);font-weight:600}.ok{color:var(--grn)}
+.mut{color:var(--mut)}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.pre{white-space:pre-wrap}
+#err{background:var(--red);color:#fff;padding:8px 12px;border-radius:8px;margin-bottom:12px;display:none}
+@media(max-width:600px){td,th{padding:6px 3px;font-size:13px}}
+</style>
+</head>
+<body>
+<header><h1>📄 Gestão de Contratos</h1>
+<nav><button id="n-agenda">Agenda</button><button id="n-contratos">Contratos</button><button id="n-novo">+ Novo contrato</button><button id="n-imp">Importar JSON</button></nav></header>
+<main><div id="err"></div><div id="view"></div></main>
+<script>
+const $=s=>document.querySelector(s), view=$('#view');
+const brl=v=>v==null?'—':v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const dt=i=>i?i.split('-').reverse().join('/'):'—';
+const TIPO={pagamento:'Pagamento',compromisso:'Compromisso',vencimento_contrato:'Fim de vigência',aviso_renovacao:'Aviso de renovação'};
+// h(tag, attrs, ...children): constrói DOM sem innerHTML (evita XSS com texto de contratos)
+function h(tag,a,...kids){const e=document.createElement(tag);for(const[k,v]of Object.entries(a||{})){if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(k==='class')e.className=v;else if(v!==false&&v!=null)e.setAttribute(k,v)}
+ for(const k of kids.flat())e.append(k instanceof Node?k:document.createTextNode(k??''));return e}
+async function api(method,url,body){
+ const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ const j=r.status===204?null:await r.json();
+ if(!r.ok){showErr(j&&j.erro||'Erro');throw new Error(j&&j.erro)}
+ $('#err').style.display='none';return j}
+function showErr(m){const e=$('#err');e.textContent=m;e.style.display='block'}
+function when(d){return d<0?h('span',{class:'late'},`atrasado ${-d}d`):d===0?h('span',{class:'late'},'hoje'):d<=7?h('span',{class:'soon'},`em ${d}d`):h('span',{class:'mut'},`em ${d}d`)}
+function setActive(id){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id===id))}
+
+async function showAgenda(){setActive('n-agenda');const ev=await api('GET','/api/agenda');
+ view.replaceChildren(h('div',{class:'card'},h('h2',{},'Próximos compromissos e prazos'),
+  ev.length?h('table',{},h('tr',{},...['Data','Quando','Tipo','Descrição','Contrato','Valor'].map(x=>h('th',{},x))),
+   ...ev.map(e=>h('tr',{class:'link',onclick:()=>showContract(e.contrato_id)},h('td',{},dt(e.data)),h('td',{},when(e.dias)),h('td',{},TIPO[e.tipo]),h('td',{},e.descricao),h('td',{},e.contrato),h('td',{class:'r'},brl(e.valor))))):
+  h('p',{class:'mut'},'Nada em aberto. Cadastre um contrato ou importe um JSON.')))}
+
+async function showList(){setActive('n-contratos');const cs=await api('GET','/api/contratos');
+ view.replaceChildren(h('div',{class:'card'},h('h2',{},'Contratos'),cs.length?h('table',{},
+  h('tr',{},...['Contrato','Contraparte','Vigência','Cláusulas','A pagar','Pago','Status'].map(x=>h('th',{},x))),
+  ...cs.map(c=>h('tr',{class:'link',onclick:()=>showContract(c.id)},h('td',{},c.nome),h('td',{},c.contraparte),
+   h('td',{},`${dt(c.data_inicio)} → ${dt(c.data_fim)}`),h('td',{},String(c.n_clausulas)),h('td',{class:'r'},brl(c.a_pagar)),h('td',{class:'r'},brl(c.pago)),h('td',{},h('span',{class:'tag'},c.status))))):
+  h('p',{class:'mut'},'Nenhum contrato cadastrado.')))}
+
+function field(label,name,val,type='text'){const i=type==='area'?h('textarea',{name}):type==='sel'?null:h('input',{name,type,value:val??''});if(type==='area')i.value=val??'';return h('div',{},h('label',{},label),i)}
+function contractForm(c){c=c||{status:'ativo'};
+ const f=h('form',{class:'card',onsubmit:async ev=>{ev.preventDefault();const d=Object.fromEntries(new FormData(f));d.renovacao_automatica=f.renovacao_automatica.checked;
+  const out=c.id?await api('PUT','/api/contratos/'+c.id,d):await api('POST','/api/contratos',d);showContract(c.id||out.id)}},
+ h('h2',{},c.id?'Editar contrato':'Novo contrato'),
+ h('div',{class:'grid'},field('Nome *','nome',c.nome),field('Contraparte *','contraparte',c.contraparte),field('Valor total (R$)','valor_total',c.valor_total,'number'),
+  field('Início','data_inicio',c.data_inicio,'date'),field('Fim da vigência','data_fim',c.data_fim,'date'),field('Aviso prévio de não-renovação (dias)','aviso_previo_dias',c.aviso_previo_dias,'number'),
+  h('div',{},h('label',{},'Status'),(()=>{const s=h('select',{name:'status'},...['ativo','encerrado','rescindido'].map(o=>h('option',{value:o},o)));s.value=c.status;return s})()),
+  h('div',{},h('label',{},'Renovação automática'),h('input',{type:'checkbox',name:'renovacao_automatica',style:'width:auto',checked:c.renovacao_automatica?'checked':false}))),
+ field('Objeto','objeto',c.objeto,'area'),field('Escopo','escopo',c.escopo,'area'),field('Observações','observacoes',c.observacoes,'area'),
+ h('div',{class:'row',style:'margin-top:10px'},h('button',{class:'p'},'Salvar'),h('button',{type:'button',onclick:()=>c.id?showContract(c.id):showList()},'Cancelar')));
+ f.querySelectorAll('input[type=number]').forEach(i=>i.step='any');return f}
+
+async function showContract(id){setActive('');const c=await api('GET','/api/contratos/'+id);
+ const reload=()=>showContract(id);
+ const addForm=(title,tbl,fields)=>{const f=h('form',{class:'row',onsubmit:async e=>{e.preventDefault();await api('POST',`/api/contratos/${id}/${tbl}`,Object.fromEntries(new FormData(f)));reload()}},
+  ...fields.map(([ph,n,t,w])=>h('input',{name:n,type:t||'text',placeholder:ph,title:ph,step:t==='number'?'any':false,style:`width:${w||160}px`,required:ph.endsWith('*')?'required':false})),h('button',{},'Adicionar'));
+  return f};
+ const delBtn=(tbl,rid)=>h('button',{class:'d',onclick:async()=>{if(confirm('Excluir?')){await api('DELETE',`/api/${tbl}/${rid}`);reload()}}},'✕');
+ view.replaceChildren(
+  h('div',{class:'card'},h('div',{class:'row'},h('h2',{style:'margin:0;flex:1'},c.nome),h('span',{class:'tag'},c.status),
+    h('button',{onclick:()=>view.replaceChildren(contractForm(c))},'Editar'),
+    h('button',{class:'d',onclick:async()=>{if(confirm('Excluir contrato e tudo que está nele?')){await api('DELETE','/api/contratos/'+id);showList()}}},'Excluir')),
+   h('p',{class:'mut'},`${c.contraparte} · ${dt(c.data_inicio)} → ${dt(c.data_fim)} · ${brl(c.valor_total)}${c.renovacao_automatica?` · renovação automática (aviso ${c.aviso_previo_dias??'?'} dias)`:''}`),
+   c.objeto&&h('div',{},h('h3',{},'Objeto'),h('div',{class:'pre'},c.objeto)),
+   c.escopo&&h('div',{},h('h3',{},'Escopo'),h('div',{class:'pre'},c.escopo)),
+   c.observacoes&&h('div',{},h('h3',{},'Observações'),h('div',{class:'pre mut'},c.observacoes))),
+  h('div',{class:'card'},h('h2',{},'Cláusulas'),
+   ...c.clausulas.map(x=>h('div',{style:'padding:8px 0;border-bottom:1px solid var(--bd)'},h('div',{class:'row'},h('strong',{style:'flex:1'},x.titulo),x.categoria&&h('span',{class:'tag'},x.categoria),delBtn('clausulas',x.id)),h('div',{class:'pre mut'},x.texto||''))),
+   h('h3',{},'Nova cláusula'),addForm('','clausulas',[['Título *','titulo','text',220],['Categoria','categoria'],['Texto','texto','text',320]])),
+  h('div',{class:'card'},h('h2',{},'Pagamentos'),c.pagamentos.length?h('table',{},h('tr',{},...['Vencimento','Descrição','Valor','Situação',''].map(x=>h('th',{},x))),
+   ...c.pagamentos.map(p=>h('tr',{},h('td',{},dt(p.vencimento)),h('td',{},p.descricao),h('td',{class:'r'},brl(p.valor)),
+    h('td',{},p.status==='pago'?h('span',{class:'ok'},`pago ${dt(p.pago_em)}`):h('span',{},'pendente')),
+    h('td',{class:'r'},h('button',{onclick:async()=>{await api('PUT','/api/pagamentos/'+p.id,{status:p.status==='pago'?'pendente':'pago'});reload()}},p.status==='pago'?'Reabrir':'Marcar pago'),delBtn('pagamentos',p.id))))):h('p',{class:'mut'},'Nenhum pagamento.'),
+   h('h3',{},'Novo pagamento'),addForm('','pagamentos',[['Descrição *','descricao','text',220],['Vencimento *','vencimento','date',150],['Valor *','valor','number',120]])),
+  h('div',{class:'card'},h('h2',{},'Compromissos e prazos'),c.compromissos.length?h('table',{},h('tr',{},...['Data','Descrição','Responsável','Situação',''].map(x=>h('th',{},x))),
+   ...c.compromissos.map(m=>h('tr',{},h('td',{},dt(m.data)),h('td',{},m.descricao),h('td',{},m.responsavel||'—'),h('td',{},m.status),
+    h('td',{class:'r'},h('button',{onclick:async()=>{await api('PUT','/api/compromissos/'+m.id,{status:m.status==='concluido'?'pendente':'concluido'});reload()}},m.status==='concluido'?'Reabrir':'Concluir'),delBtn('compromissos',m.id))))):h('p',{class:'mut'},'Nenhum compromisso.'),
+   h('h3',{},'Novo compromisso'),addForm('','compromissos',[['Descrição *','descricao','text',240],['Data *','data','date',150],['Responsável','responsavel']])))}
+
+function showImport(){setActive('n-imp');const ta=h('textarea',{style:'min-height:260px;font-family:monospace',placeholder:'{"nome":"...","contraparte":"...","clausulas":[...],"pagamentos":[...],"compromissos":[...]}'});
+ view.replaceChildren(h('div',{class:'card'},h('h2',{},'Importar contrato (JSON)'),h('p',{class:'mut'},'Cole um objeto ou uma lista de objetos. Nada é gravado se algum item for inválido.'),ta,
+  h('div',{class:'row',style:'margin-top:10px'},h('button',{class:'p',onclick:async()=>{let d;try{d=JSON.parse(ta.value)}catch{return showErr('JSON inválido.')}
+   let last;for(const c of Array.isArray(d)?d:[d])last=(await api('POST','/api/contratos',c)).id;showContract(last)}},'Importar'))))}
+
+$('#n-agenda').onclick=showAgenda;$('#n-contratos').onclick=showList;$('#n-novo').onclick=()=>{setActive('n-novo');view.replaceChildren(contractForm())};$('#n-imp').onclick=showImport;
+showAgenda();
+</script>
+</body>
+</html>
