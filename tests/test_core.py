@@ -199,6 +199,16 @@ class Core(unittest.TestCase):
             with self.assertRaises(lembretes.ErroEmail) as cm:
                 lembretes.enviar_smtp("a", "b")
             self.assertIn("SENHA DE APP", str(cm.exception))
+        # a etapa em que a conexão caiu aparece na mensagem
+        srv = mock.MagicMock()
+        srv.__enter__.return_value = srv
+        srv.login.side_effect = smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+        with mock.patch.dict(os.environ, {**env, "SMTP_PASS": "SEGREDO123"}), \
+                mock.patch.object(lembretes.smtplib, "SMTP", return_value=srv):
+            with self.assertRaises(lembretes.ErroEmail) as cm:
+                lembretes.enviar_smtp("a", "b")
+            self.assertIn("etapa: login", str(cm.exception))
+            self.assertNotIn("SEGREDO123", str(cm.exception))  # a senha nunca aparece na mensagem
 
 
 class Config(unittest.TestCase):
