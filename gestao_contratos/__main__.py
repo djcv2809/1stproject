@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 
-from . import db, lembretes, server
+from . import config, db, lembretes, server
 
 
 def main(argv=None):
@@ -21,6 +21,7 @@ def main(argv=None):
     i = sub.add_parser("importar", help="Importa contrato(s) de um arquivo JSON")
     i.add_argument("arquivo")
     a = p.parse_args(argv)
+    config.carregar_env()
     conn = db.connect()
 
     if a.cmd == "servir":

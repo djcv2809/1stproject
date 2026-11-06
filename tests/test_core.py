@@ -135,6 +135,36 @@ class Core(unittest.TestCase):
         self.assertEqual(db.get_contract(conn, 1)["emails_aviso"], "z@x.com")
 
 
+    def test_recupera_aviso_perdido(self):
+        db.create_contract(self.conn, {"nome": "x", "contraparte": "y",
+                                       "compromissos": [{"descricao": "d", "data": "2026-11-12"}]})
+        self.assertEqual(len(lembretes.pendentes(self.conn, date(2026, 11, 6))), 1)  # 6 dias: janela de 7
+        lembretes.executar(self.conn, date(2026, 11, 6), enviar=lambda a, c, t: None)
+        self.assertEqual(lembretes.pendentes(self.conn, date(2026, 11, 7)), [])      # mesma janela
+        self.assertEqual(len(lembretes.pendentes(self.conn, date(2026, 11, 11))), 1)  # janela de 1 dia
+        self.assertEqual(db.agenda(self.conn, date(2026, 10, 1))[0]["dias"], 42)
+        self.assertEqual(lembretes.pendentes(self.conn, date(2026, 10, 1)), [])      # fora de 30 dias
+
+
+class Config(unittest.TestCase):
+    def test_env_nao_sobrescreve(self):
+        import os
+        import tempfile
+        from gestao_contratos import config
+        path = os.path.join(tempfile.mkdtemp(), ".env")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write('# c\nGC_T1="a b"\nGC_T2=novo\nlixo\n')
+        os.environ["GC_T2"] = "ja-existia"
+        try:
+            self.assertTrue(config.carregar_env(path))
+            self.assertEqual(os.environ["GC_T1"], "a b")
+            self.assertEqual(os.environ["GC_T2"], "ja-existia")
+        finally:
+            os.environ.pop("GC_T1", None)
+            os.environ.pop("GC_T2", None)
+        self.assertFalse(config.carregar_env(path + ".nao-existe"))
+
+
 class Http(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

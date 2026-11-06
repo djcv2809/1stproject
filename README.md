@@ -56,6 +56,21 @@ export MAIL_FROM=voce@gmail.com MAIL_TO=voce@gmail.com,socio@empresa.com
 Para envio diário automático, agende `python -m gestao_contratos lembretes` (cron, Agendador de
 Tarefas do Windows etc.) em uma máquina que fique ligada, com essas variáveis definidas.
 
+## Rodar todo dia (Windows)
+
+1. Instale o Python 3.10+ (python.org; marque "Add Python to PATH") e copie esta pasta para o computador.
+2. Copie `.env.example` para `.env` e preencha (no Gmail, gere uma *senha de app* em
+   myaccount.google.com/apppasswords; exige verificação em duas etapas).
+3. Coloque os JSONs em `data\` e importe cada um: `python -m gestao_contratos importar data\arquivo.json`
+4. Teste sem enviar: `python -m gestao_contratos lembretes --simular`
+5. Agendador de Tarefas > Criar Tarefa Básica > Diária (ex.: 08:00) > Iniciar um programa:
+   programa `python`, argumentos `-m gestao_contratos lembretes`, "Iniciar em" = a pasta do projeto.
+   Em Configurações da tarefa, marque **"Executar assim que possível se uma execução agendada for perdida"**.
+6. Faça backup periódico de `data\contratos.db`: é o único lugar onde os dados existem.
+
+Se o computador ficar desligado, o aviso sai na próxima vez que ele ligar (cada aviso é enviado uma vez,
+ao entrar na janela de 30/15/7/1/0 dias). No macOS/Linux, use `cron` com o mesmo comando.
+
 ## Segurança
 
 - O servidor escuta só em `127.0.0.1` e **não tem login**. Não exponha à rede/internet sem

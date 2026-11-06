@@ -41,10 +41,11 @@ def pendentes(conn, hoje=None, leads=None):
     for e in db.agenda(conn, hoje):
         if e["dias"] < 0:
             bucket = "atraso"
-        elif e["dias"] in leads:
-            bucket = str(e["dias"])
         else:
-            continue
+            janelas = [l for l in leads if l >= e["dias"]]
+            if not janelas:  # ainda fora da primeira janela
+                continue
+            bucket = str(min(janelas))  # janela mais próxima; recupera dias em que o app não rodou
         chave = f"{e['chave']}|{bucket}"
         if conn.execute("SELECT 1 FROM lembretes_enviados WHERE chave=?", (chave,)).fetchone():
             continue
