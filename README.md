@@ -63,9 +63,11 @@ Tarefas do Windows etc.) em uma máquina que fique ligada, com essas variáveis 
    myaccount.google.com/apppasswords; exige verificação em duas etapas).
 3. Coloque os JSONs em `data\` e importe cada um: `python -m gestao_contratos importar data\arquivo.json`
 4. Teste sem enviar: `python -m gestao_contratos lembretes --simular`
-5. Agendador de Tarefas > Criar Tarefa Básica > Diária (ex.: 08:00) > Iniciar um programa:
-   programa `python`, argumentos `-m gestao_contratos lembretes`, "Iniciar em" = a pasta do projeto.
-   Em Configurações da tarefa, marque **"Executar assim que possível se uma execução agendada for perdida"**.
+5. Dê **clique duplo em `agendar_windows.bat`**: ele cria a tarefa diária às **10:00** (para mudar o horário,
+   edite `$hora` em `agendar_windows.ps1` e rode de novo). A tarefa roda mesmo que o PC estivesse desligado
+   às 10:00, assim que ele ligar. Para testar na hora, abra o PowerShell e rode
+   `Start-ScheduledTask -TaskName "Gestao de Contratos - Avisos"`. (Manualmente: Agendador de Tarefas >
+   Criar Tarefa Básica > Diária > programa `py`, argumentos `-3 -m gestao_contratos lembretes`.)
 6. Faça backup periódico de `data\contratos.db`: é o único lugar onde os dados existem.
 
 Se o computador ficar desligado, o aviso sai na próxima vez que ele ligar (cada aviso é enviado uma vez,
