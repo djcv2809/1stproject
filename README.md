@@ -69,6 +69,8 @@ Tarefas do Windows etc.) em uma máquina que fique ligada, com essas variáveis 
    às 10:00, assim que ele ligar. Para testar na hora, abra o PowerShell e rode
    `Start-ScheduledTask -TaskName "Gestao de Contratos - Avisos"`. (Manualmente: Agendador de Tarefas >
    Criar Tarefa Básica > Diária > programa `py`, argumentos `-3 -m gestao_contratos lembretes`.)
+   Para atualizar só o campo Observações dos contratos já importados (sem tocar em pagamentos nem duplicar),
+   dê clique duplo em `atualizar_observacoes_windows.bat` ou rode `py -3 -m gestao_contratos atualizar-obs data\arquivo.json`.
 6. Faça backup periódico de `data\contratos.db`: é o único lugar onde os dados existem.
 
 Se o computador ficar desligado, o aviso sai na próxima vez que ele ligar (cada aviso é enviado uma vez,

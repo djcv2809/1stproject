@@ -2,6 +2,7 @@
   python -m gestao_contratos servir [--porta 8000] [--host 127.0.0.1]
   python -m gestao_contratos lembretes [--simular]
   python -m gestao_contratos importar arquivo.json
+  python -m gestao_contratos atualizar-obs arquivo.json
 """
 import argparse
 import json
@@ -20,6 +21,8 @@ def main(argv=None):
     l.add_argument("--simular", action="store_true", help="Mostra o e-mail sem enviar nem registrar")
     i = sub.add_parser("importar", help="Importa contrato(s) de um arquivo JSON")
     i.add_argument("arquivo")
+    u = sub.add_parser("atualizar-obs", help="Atualiza só as observações dos contratos de um JSON (casa pelo nome)")
+    u.add_argument("arquivo")
     a = p.parse_args(argv)
     config.carregar_env()
     conn = db.connect()
@@ -43,6 +46,18 @@ def main(argv=None):
             data = json.load(fh)
         for c in data if isinstance(data, list) else [data]:
             print("Contrato criado, id =", db.create_contract(conn, c))
+    elif a.cmd == "atualizar-obs":
+        with open(a.arquivo, encoding="utf-8") as fh:
+            data = json.load(fh)
+        for c in data if isinstance(data, list) else [data]:
+            if not c.get("observacoes"):
+                continue
+            rows = conn.execute("SELECT id FROM contratos WHERE nome=?", (c["nome"],)).fetchall()
+            if not rows:
+                print("Não encontrado no banco:", c["nome"])
+            for r in rows:
+                db.update(conn, "contratos", r["id"], {"observacoes": c["observacoes"]})
+                print("Observações atualizadas:", c["nome"])
     return 0
 
 

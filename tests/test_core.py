@@ -146,6 +146,35 @@ class Core(unittest.TestCase):
         self.assertEqual(lembretes.pendentes(self.conn, date(2026, 10, 1)), [])      # fora de 30 dias
 
 
+    def test_atualizar_obs_so_mexe_nas_observacoes(self):
+        import io
+        import os
+        import tempfile
+        from contextlib import redirect_stdout
+        from gestao_contratos.__main__ import main
+        d = tempfile.mkdtemp()
+        antigo = db.DB_PATH
+        db.DB_PATH = os.path.join(d, "t.db")
+        try:
+            conn = db.connect()
+            cid = db.create_contract(conn, {**CONTRATO, "observacoes": "velha"})
+            pid = conn.execute("SELECT id FROM pagamentos WHERE descricao='Aluguel nov'").fetchone()[0]
+            db.update(conn, "pagamentos", pid, {"status": "pago", "pago_em": "2026-11-06"})
+            novo = os.path.join(d, "n.json")
+            with open(novo, "w", encoding="utf-8") as fh:
+                json.dump([{"nome": CONTRATO["nome"], "contraparte": "x", "observacoes": "nova\nlinha"},
+                           {"nome": "inexistente", "observacoes": "z"}], fh)
+            with redirect_stdout(io.StringIO()) as out:
+                main(["atualizar-obs", novo])
+            c = db.get_contract(conn, cid)
+            self.assertEqual(c["observacoes"], "nova\nlinha")
+            self.assertEqual(c["contraparte"], "Imob Ltda")  # não muda
+            self.assertEqual([p["status"] for p in c["pagamentos"]].count("pago"), 2)  # pagos preservados
+            self.assertIn("Não encontrado", out.getvalue())
+        finally:
+            db.DB_PATH = antigo
+
+
 class Config(unittest.TestCase):
     def test_env_nao_sobrescreve(self):
         import os
